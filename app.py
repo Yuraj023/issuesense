@@ -26,9 +26,51 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
-# Load trained ML model
-model = pickle.load(open("model/complaint_model.pkl", "rb"))
-vectorizer = pickle.load(open("model/vectorizer.pkl", "rb"))
+def is_vectorizer_fitted(loaded_vectorizer):
+    return hasattr(loaded_vectorizer, "idf_") and loaded_vectorizer.idf_ is not None
+
+
+def train_and_save_artifacts():
+    import pandas as pd
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.linear_model import LogisticRegression
+
+    dataset_path = os.path.join("dataset", "complaints.csv")
+    data = pd.read_csv(dataset_path)
+    data["cleaned_text"] = data["complaint_text"].apply(clean_text)
+
+    new_vectorizer = TfidfVectorizer()
+    features = new_vectorizer.fit_transform(data["cleaned_text"])
+    labels = data["category"]
+
+    new_model = LogisticRegression(max_iter=1000)
+    new_model.fit(features, labels)
+
+    with open("model/complaint_model.pkl", "wb") as model_file:
+        pickle.dump(new_model, model_file)
+    with open("model/vectorizer.pkl", "wb") as vectorizer_file:
+        pickle.dump(new_vectorizer, vectorizer_file)
+
+    return new_model, new_vectorizer
+
+
+def load_artifacts():
+    try:
+        with open("model/complaint_model.pkl", "rb") as model_file:
+            loaded_model = pickle.load(model_file)
+        with open("model/vectorizer.pkl", "rb") as vectorizer_file:
+            loaded_vectorizer = pickle.load(vectorizer_file)
+
+        if not is_vectorizer_fitted(loaded_vectorizer):
+            raise ValueError("Vectorizer is not fitted")
+
+        return loaded_model, loaded_vectorizer
+    except Exception:
+        return train_and_save_artifacts()
+
+
+# Load trained ML model (fallback to training if artifacts are invalid)
+model, vectorizer = load_artifacts()
 
 URL_PATTERN = re.compile(r"(?i)\b(?:https?://|www\.)\S+")
 EMAIL_PATTERN = re.compile(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b")
