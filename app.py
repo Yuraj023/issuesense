@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 from supabase import create_client
 from textblob import TextBlob
 from utils.preprocess import clean_text
+import nltk
+nltk.download('wordnet')
+nltk.download('omw-1.4')
 
 # Load environment variables
 load_dotenv()
