@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="login-page">
+    <div class="login-shell">
+        <div class="login-card">
+            <div class="login-header">
+                <h2>Administrator Login</h2>
+                <p>Use your admin credentials to continue.</p>
+            </div>
+
+            {% if error_message %}
+            <div class="login-alert">
+                <span>{{ error_message }}</span>
+            </div>
+            {% endif %}
+
+            <form class="login-form" method="POST" action="/login{% if next_url %}?next={{ next_url|urlencode }}{% endif %}">
+                <label class="login-label" for="email">Email</label>
+                <input class="login-input" type="email" id="email" name="email" placeholder="admin@company.com" required>
+
+                <label class="login-label" for="password">Password</label>
+                <input class="login-input" type="password" id="password" name="password" placeholder="Enter your password" required>
+
+                <button class="login-submit" type="submit">Sign In</button>
+            </form>
+
+            <div class="login-meta">
+                <span>Admin access only. Contact the system owner if you need credentials.</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

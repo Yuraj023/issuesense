@@ -1,5 +1,7 @@
 # Main application file
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect, session, url_for
+from functools import wraps
+from werkzeug.security import check_password_hash
 import pickle
 import os
 import json
@@ -25,6 +27,20 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # Initialize Flask app
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
+
+
+def is_safe_next_url(target):
+    return bool(target) and target.startswith("/")
+
+
+def require_admin(view_func):
+    @wraps(view_func)
+    def wrapper(*args, **kwargs):
+        if not session.get("admin_user_id"):
+            return redirect(url_for("login", next=request.path))
+        return view_func(*args, **kwargs)
+
+    return wrapper
 
 def is_vectorizer_fitted(loaded_vectorizer):
     return hasattr(loaded_vectorizer, "idf_") and loaded_vectorizer.idf_ is not None
@@ -103,6 +119,54 @@ def home():
     return render_template("index.html")
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("admin_user_id"):
+        return redirect(url_for("dashboard"))
+
+    error_message = None
+    next_url = request.args.get("next")
+
+    if request.method == "POST":
+        email = (request.form.get("email") or "").strip().lower()
+        password = request.form.get("password") or ""
+
+        if not email or not password:
+            error_message = "Please enter your email and password."
+        else:
+            try:
+                lookup = (
+                    supabase.table("admin_users")
+                    .select("id,email,password_hash,is_active")
+                    .eq("email", email)
+                    .limit(1)
+                    .execute()
+                )
+                record = lookup.data[0] if lookup.data else None
+            except Exception:
+                record = None
+
+            if not record or not record.get("is_active"):
+                error_message = "Invalid email or password."
+            elif not check_password_hash(record.get("password_hash") or "", password):
+                error_message = "Invalid email or password."
+            else:
+                session["admin_user_id"] = record.get("id")
+                session["admin_email"] = record.get("email")
+
+                if is_safe_next_url(next_url):
+                    return redirect(next_url)
+                return redirect(url_for("dashboard"))
+
+    return render_template("login.html", error_message=error_message, next_url=next_url)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("home"))
+
+
 @app.route("/predict", methods=["POST"])
 def predict():
     text = request.form["complaint"]
@@ -134,6 +198,7 @@ def predict():
 
 
 @app.route("/dashboard")
+@require_admin
 def dashboard():
     model_metrics = {
         "precision": "85.6%",
@@ -224,6 +289,7 @@ def dashboard():
 
 
 @app.route("/solved", methods=["GET", "POST"])
+@require_admin
 def resolve():
     action_message = None
     action_message_type = "pending"
